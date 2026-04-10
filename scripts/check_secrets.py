@@ -64,11 +64,14 @@ SKIP_DIRS = {
 
 def should_skip_file(path: str) -> bool:
     """Check if file should be skipped."""
+    # Skip self (avoid false positives on pattern strings in this file)
+    if 'check_secrets.py' in path:
+        return True
+
     # Skip binary files
     basename = os.path.basename(path)
     if basename.startswith('.') and '/' not in path:
-        # Hidden files in root (like .env) should be checked
-        pass
+        pass  # Hidden files in root (like .env) should be checked
 
     # Skip by extension
     _, ext = os.path.splitext(path)
@@ -107,6 +110,8 @@ def scan_files(filepaths: list) -> dict:
     """Scan multiple files. Returns {filepath: [(line_num, line, pattern_name), ...]}."""
     results = {}
     for filepath in filepaths:
+        if 'check_secrets.py' in filepath:
+            continue
         if should_skip_file(filepath):
             continue
         findings = scan_file(filepath)
