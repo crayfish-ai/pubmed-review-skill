@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env.minimax
+tasks/ablesci_tasks.json
+tasks/ablesci_tasks.json.tmp*
+.locks/
+logs/
+results/
+*.log
+*.tmp
+.DS_Store
