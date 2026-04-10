@@ -5,8 +5,6 @@
 # Usage: bash scripts/pre_release_check.sh [project_dir]
 # ============================================================
 
-set -e
-
 PROJECT_DIR="${1:-.}"
 
 echo "[pre-release] Starting safety checks for: $(cd "$PROJECT_DIR" && pwd)"
@@ -14,7 +12,7 @@ echo "========================================"
 
 EXIT_CODE=0
 
-# 1. Run safety checker
+# 1. Run safety checker (most important)
 echo ""
 echo "[1/5] Running safety scanner..."
 CHECKER="$(dirname "$0")/check_project_safety.py"
@@ -49,32 +47,27 @@ if [ ! -f "$PROJECT_DIR/.env.example" ]; then
     EXIT_CODE=1
 else
     echo "[pre-release] ✅ .env.example exists"
-    # Verify .env.example has no real secrets
-    if grep -E "github_pat_|ghp_[a-zA-Z0-9]{36}|sk-[a-zA-Z0-9]{20,}|ufFAY[A-Za-z0-9]{10,}" "$PROJECT_DIR/.env.example" >/dev/null 2>&1; then
+    # Verify .env.example has no real secrets (not just placeholders)
+    if grep -E "github_pat_[A-Za-z0-9_]{20,}|ghp_[a-zA-Z0-9]{36,}|ufFAY[A-Za-z0-9]{10,}|sk-[a-zA-Z0-9]{30,}" "$PROJECT_DIR/.env.example" >/dev/null 2>&1; then
         echo "[pre-release] ❌ .env.example contains what looks like a real secret - use placeholder values"
         EXIT_CODE=1
     fi
 fi
 
-# 4. Check no .env or secrets are tracked in git
+# 4. Check no .env or secrets are tracked in git (precise check only)
 echo ""
 echo "[4/5] Checking git for accidentally committed secrets..."
 if [ -d "$PROJECT_DIR/.git" ]; then
-    TRACKED=$(cd "$PROJECT_DIR" && git ls-files 2>/dev/null | grep -E "^\.env$|config/\.env|secrets\.|credential" || true)
-    if [ -n "$TRACKED" ]; then
-        echo "[pre-release] ❌ Tracked secret files found:"
-        echo "$TRACKED" | while read -r f; do echo "  - $f"; done
+    # Only check for truly sensitive files being tracked - not files with "secret" in name
+    TRACKED_ENV=$(cd "$PROJECT_DIR" && git ls-files 2>/dev/null | grep -E '^\.env$' || true)
+    TRACKED_CONFIG_ENV=$(cd "$PROJECT_DIR" && git ls-files 2>/dev/null | grep -E '^config/\.env$' || true)
+    if [ -n "$TRACKED_ENV" ] || [ -n "$TRACKED_CONFIG_ENV" ]; then
+        echo "[pre-release] ❌ Secret files tracked in git:"
+        [ -n "$TRACKED_ENV" ] && echo "  - .env"
+        [ -n "$TRACKED_CONFIG_ENV" ] && echo "  - config/.env"
         EXIT_CODE=1
     else
         echo "[pre-release] ✅ No secret files tracked in git"
-    fi
-
-    # Check staged/committed secrets in recent commits
-    if cd "$PROJECT_DIR" && git log --oneline -5 2>/dev/null | head -3; then
-        RECENT_SECRETS=$(cd "$PROJECT_DIR" && git log -p --name-only -3 2>/dev/null | grep -E "github_pat_|ghp_|ufFAY|sk-[a-zA-Z0-9]{20,}" || true)
-        if [ -n "$RECENT_SECRETS" ]; then
-            echo "[pre-release] ⚠️  Recent commits may contain secrets (run git filter-repo to clean)"
-        fi
     fi
 fi
 

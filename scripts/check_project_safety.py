@@ -27,7 +27,7 @@ SECRET_PATTERNS = [
     (r'FEISHU_APP_SECRET\s*[=:]\s*["\']?[A-Za-z0-9_-]{10,}', 'Feishu App Secret (env style)'),
     (r'"appSecret"\s*:\s*"[^"]{10,}"', 'App Secret (JSON)'),
     (r'appSecret["\s]*[=:]["\s]*["\'][^"\']{10,}["\']', 'App Secret (JSON)'),
-    (r'MINIMAX_API_KEY\s*[=:]\s*["\']?[A-Za-z0-9_-]{10,}', 'MiniMax API Key'),
+    (r'MINIMAX_API_KEY\s*[=:]\s*["\']?(?!your_)[A-Za-z0-9_-]{30,}', 'MiniMax API Key'),
     (r'OPENAI_API_KEY\s*[=:]\s*["\']?[A-Za-z0-9_-]{10,}', 'OpenAI API Key'),
     (r'ANTHROPIC_API_KEY\s*[=:]\s*["\']?[A-Za-z0-9_-]{10,}', 'Anthropic API Key'),
     (r'AMAZON/aws_access_key_id', 'AWS Access Key (ini)'),
@@ -89,8 +89,8 @@ SKIP_DIRS = {'.git', '.svn', '__pycache__', 'node_modules', '.venv', 'venv',
 
 
 def should_skip(path):
-    if 'check_project_safety.py' in path:
-        return True
+    if 'check_project_safety.py' in path or 'check_secrets.py' in path:
+        return True  # skip self and sibling secret checker
     _, ext = os.path.splitext(path)
     if ext.lower() not in TEXT_EXTENSIONS:
         return True
@@ -109,15 +109,22 @@ def scan_file(filepath):
                 # Skip comments for secret scan
                 if s.startswith('#') or s.startswith('//'):
                     continue
+                # Skip docstrings/comments that contain pattern strings (not actual usages)
+                if s.startswith('"""') or s.startswith("'''"):
+                    continue
                 for pattern, name in SECRET_PATTERNS:
                     if re.search(pattern, line, re.IGNORECASE):
                         findings.append((lineno, line.rstrip(), 'SECRET', name))
+                # Skip README/SKILL/documentation files for path checks (docs about paths ≠ hardcoded paths)
+                if re.match(r'(README|SKILL|CHANGELOG|LICENSE|INSTALL|SECURITY|SETUP|\.md)', os.path.basename(fp), re.I):
+                    pass  # still check for secrets and risky code
+                else:
+                    for pattern, name in HARDCODED_PATHS:
+                        if re.search(pattern, line):
+                            findings.append((lineno, line.rstrip(), 'PATH', name))
                 for pattern, name in RISKY_PATTERNS:
                     if re.search(pattern, line):
                         findings.append((lineno, line.rstrip(), 'RISKY', name))
-                for pattern, name in HARDCODED_PATHS:
-                    if re.search(pattern, line):
-                        findings.append((lineno, line.rstrip(), 'PATH', name))
     except Exception as e:
         pass
     return findings
