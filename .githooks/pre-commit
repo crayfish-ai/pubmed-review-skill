@@ -1,19 +1,16 @@
 #!/bin/bash
 # Pre-commit hook: detect secrets before they enter git history
-# 
-# Usage: This hook runs automatically before each commit.
-# To enable: git config core.hooksPath .githooks
 #
-# To bypass temporarily: git commit --no-verify -m "message"
+# To enable: git config core.hooksPath .githooks
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-CHECKER="$PROJECT_DIR/../scripts/check_secrets.py"
+CHECKER="$PROJECT_DIR/scripts/check_secrets.py"
 
-# Staged files only (more precise)
 STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM)
 if [ -z "$STAGED_FILES" ]; then
-    STAGED_FILES=$(git ls-files)
+    echo "[pre-commit] No staged files, skipping check"
+    exit 0
 fi
 
 if [ -f "$CHECKER" ]; then
@@ -29,5 +26,5 @@ if [ -f "$CHECKER" ]; then
     fi
     echo "[pre-commit] ✅ Secret check passed"
 else
-    echo "[pre-commit] ⚠️ check_secrets.py not found at $CHECKER"
+    echo "[pre-commit] ⚠️ check_secrets.py not found, skipping"
 fi
